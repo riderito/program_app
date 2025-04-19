@@ -40,7 +40,7 @@ class ConvertCurrencyStates(StatesGroup):
 @dp.message(Command("start"))
 async def start(message: Message) -> None:
     await message.answer(
-        "Привет!🫡\n"
+        "Привет!🤗\n"
         "Используй команду /save_currency, чтобы сохранить курс валюты.\n"
         "А команду /convert — чтобы выполнить конвертацию."
     )
@@ -49,7 +49,7 @@ async def start(message: Message) -> None:
 # Команда /save_currency
 @dp.message(Command("save_currency"))
 async def save_currency(message: Message, state: FSMContext) -> None:
-    await message.answer("Введите название валюты (например, USD, EUR):")
+    await message.answer("💰 Введите название валюты (например, USD или EUR):")
     await state.set_state(SaveCurrencyStates.waiting_for_name) # Переходим к следующему шагу
 
 
@@ -57,8 +57,16 @@ async def save_currency(message: Message, state: FSMContext) -> None:
 @dp.message(SaveCurrencyStates.waiting_for_name)
 async def currency_name(message: Message, state: FSMContext) -> None:
     currency = message.text.upper().strip()  # Приводим к верхнему регистру (usd в USD)
+
+    # Проверка: только латинские буквы, длина от 2 до 5
+    if not currency.isalpha() or not (2 <= len(currency) <= 5):
+        await message.answer(
+            "⛔ Название валюты должно содержать только латинские буквы (от 2 до 5 символов)."
+        )
+        return
+
     await state.update_data(currency_name=currency)  # Сохраняем в хранилище
-    await message.answer(f"Введите курс {currency} к рублю:")
+    await message.answer(f"🪙 Введите курс {currency} к рублю:")
     await state.set_state(SaveCurrencyStates.waiting_for_rate)
 
 
@@ -69,7 +77,7 @@ async def currency_rate(message: Message, state: FSMContext) -> None:
         # Преобразуем ввод в число и заменяем запятую на точку
         rate = float(message.text.replace(",", "."))
         if rate <= 0:
-            raise ValueError("Курс должен быть положительным")
+            raise ValueError("⛔ Курс должен быть положительным")
 
         # Получаем сохранённое название валюты
         data = await state.get_data()
@@ -80,18 +88,18 @@ async def currency_rate(message: Message, state: FSMContext) -> None:
         user_currencies.setdefault(user_id, {})[currency] = rate
         logger.info(f"Пользователь {user_id} сохранил курс: 1 {currency} = {rate} RUB")
 
-        await message.answer(f"Сохранено: 1 {currency} = {rate:.2f} RUB")
+        await message.answer(f"✅ Сохранено: 1 {currency} = {rate:.2f} RUB")
         await state.clear()  # Завершаем FSM
 
     except ValueError:
-        await message.answer("Ошибка! Введите корректный числовой курс (например: 90.5):")
+        await message.answer("⛔ Ошибка! Введите корректный числовой курс (например, 95.5):")
 
 
 
 # Команда /convert
 @dp.message(Command("convert"))
 async def convert(message: Message, state: FSMContext) -> None:
-    await message.answer("Введите название валюты для конвертации (например, USD, EUR):")
+    await message.answer("🤑 Введите название валюты для конвертации (например, USD или EUR):")
     await state.set_state(ConvertCurrencyStates.waiting_for_currency)
 
 
@@ -104,7 +112,7 @@ async def convert_currency(message: Message, state: FSMContext) -> None:
     # Проверяем, есть ли у пользователя сохранённые валюты и нужная из них
     if user_id in user_currencies and currency in user_currencies[user_id]:
         await state.update_data(currency=currency)
-        await message.answer(f"Введите сумму в {currency}, которую нужно конвертировать:")
+        await message.answer(f"💸 Введите сумму в {currency}, которую нужно конвертировать:")
         await state.set_state(ConvertCurrencyStates.waiting_for_amount)
     else:
         # Формируем список всех сохранённых валют пользователя
@@ -114,12 +122,12 @@ async def convert_currency(message: Message, state: FSMContext) -> None:
                 for cur, rate in user_currencies[user_id].items()
             )
             await message.answer(
-                f"❌ Валюта {currency} не найдена.\n"
+                f"⛔ Валюта {currency} не найдена.\n"
                 f"Вот список доступных валют, которые вы сохранили:\n\n{available}"
             )
         else:
             await message.answer(
-                f"❌ Валюта {currency} не найдена.\n"
+                f"⛔ Валюта {currency} не найдена.\n"
                 f"Вы ещё не сохраняли ни одной валюты. Используйте команду /save_currency."
             )
         await state.clear()
@@ -127,11 +135,11 @@ async def convert_currency(message: Message, state: FSMContext) -> None:
 
 # Обработка суммы для конвертации
 @dp.message(ConvertCurrencyStates.waiting_for_amount)
-async def process_convert_amount(message: Message, state: FSMContext) -> None:
+async def convert_amount(message: Message, state: FSMContext) -> None:
     try:
         amount = float(message.text.replace(",", "."))
         if amount <= 0:
-            raise ValueError("Сумма должна быть положительной")
+            raise ValueError("⛔ Сумма должна быть положительной")
 
         user_id = message.from_user.id
         data = await state.get_data()
@@ -147,7 +155,7 @@ async def process_convert_amount(message: Message, state: FSMContext) -> None:
         await state.clear()  # Завершаем FSM
 
     except ValueError:
-        await message.answer("Ошибка! Введите корректную сумму (например: 100 или 50.5):")
+        await message.answer("⛔ Ошибка! Введите корректную сумму (например: 10 или 5.5):")
 
 
 async def main() -> None:
@@ -156,4 +164,3 @@ async def main() -> None:
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())  # Запуск основного цикла
-
