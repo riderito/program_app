@@ -1,12 +1,12 @@
 import os  # Для доступа к переменным окружения
-import logging  # Для логирования событий (например, кто и что сохраняет)
+import logging  # Для записи событий (логирования)
 from typing import Dict  # Для аннотации типов словаря
 
-from aiogram import Bot, Dispatcher  # Основные компоненты для создания Telegram-бота
-from aiogram.filters import Command  # Фильтр для обработки команд типа /start, /save_currency
-from aiogram.fsm.context import FSMContext  # Контекст состояния, хранит промежуточные данные
-from aiogram.fsm.state import State, StatesGroup  # Для описания состояний FSM
-from aiogram.types import Message  # Объект входящего сообщения от пользователя
+from aiogram import Bot, Dispatcher  # Основные компоненты для создания бота
+from aiogram.filters import Command  # Обработка команд типа /start, /save_currency
+from aiogram.fsm.context import FSMContext  # Для хранения промежуточных данных
+from aiogram.fsm.state import State, StatesGroup  # Для определения состояний FSM
+from aiogram.types import Message  # Класс для работы с сообщениями пользователя
 
 
 # Настройка логирования: будет выводиться информация в консоль (например, сохранённые курсы)
@@ -16,12 +16,13 @@ logger = logging.getLogger(__name__)
 # Получаем токен бота из переменной окружения
 API_TOKEN = os.getenv("API_TOKEN")
 
-# Создаём экземпляр бота и диспетчера — это "мозг" нашего бота
+# Создаём экземпляр бота
 bot = Bot(token=API_TOKEN)
+# Создаём диспетчер (обработчик команд)
 dp = Dispatcher()
 
 # Хранилище курсов валют (у каждого пользователя — свой словарь)
-# Словарь вида {user_id: {"USD": 90.5, "EUR": 100.1, ...}}
+# Словарь имеет вид {user_id: {"USD": 90.5, "EUR": 100.1, ...}}
 user_currencies: Dict[int, Dict[str, float]] = {}
 
 
@@ -85,11 +86,13 @@ async def currency_rate(message: Message, state: FSMContext) -> None:
         user_id = message.from_user.id
 
         # Сохраняем курс валюты для этого пользователя
+        # Если пользователь сохраняет курс впервые, cоздаём пустой словарь
         user_currencies.setdefault(user_id, {})[currency] = rate
+        # Делаем лог о сохранении
         logger.info(f"Пользователь {user_id} сохранил курс: 1 {currency} = {rate} RUB")
 
         await message.answer(f"✅ Сохранено: 1 {currency} = {rate:.2f} RUB")
-        await state.clear()  # Завершаем FSM
+        await state.clear()  # Завершаем FSM (сбрасываем состояние)
 
     except ValueError:
         await message.answer("⛔ Ошибка! Введите корректный числовой курс (например, 95.5):")
@@ -159,8 +162,10 @@ async def convert_amount(message: Message, state: FSMContext) -> None:
 
 
 async def main() -> None:
-    await dp.start_polling(bot)  # Запускаем бота (начинает слушать входящие сообщения)
+    # Запускаем бота (бесконечный цикл опроса серверов на новые сообщения)
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(main())  # Запуск основного цикла
+    # Запускаем асинхронный код
+    asyncio.run(main())
