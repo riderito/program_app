@@ -1,4 +1,5 @@
-import logging
+import os  # Для доступа к переменным окружения
+import logging  # Для записи событий (логирования)
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -13,8 +14,9 @@ logger = logging.getLogger(__name__)
 # Получаем токен бота из переменной окружения
 API_TOKEN = os.getenv("API_TOKEN")
 
-# Инициализация бота и диспетчера
-bot = Bot(token=BOT_TOKEN)
+# Создаём экземпляр бота
+bot = Bot(token=API_TOKEN)
+# Создаём диспетчер (обработчик команд)
 dp = Dispatcher()
 
 # Создает и возвращает соединение с базой данных
