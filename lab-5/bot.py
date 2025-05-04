@@ -1,13 +1,13 @@
 import os  # Для доступа к переменным окружения
 import logging  # Для записи событий (логирования)
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
-import psycopg2
+from aiogram import Bot, Dispatcher, types, F # Основные компоненты для бота
+from aiogram.filters import Command # Для обработки команд
+from aiogram.fsm.context import FSMContext # Для хранения промежуточных данных
+from aiogram.fsm.state import State, StatesGroup # Состояния FSM
+from aiogram.utils.keyboard import ReplyKeyboardBuilder # Для создания клавиатур
+import psycopg2 # Для работы с PostgreSQL
 
-# Настройка логирования
+# Настройка логирования: выводится информация в консоль
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ bot = Bot(token=API_TOKEN)
 # Создаём диспетчер (обработчик команд)
 dp = Dispatcher()
 
-# Создает и возвращает соединение с базой данных
+# Функция для подключения к базе данных
 def get_db_connection():
     return psycopg2.connect(
         host="localhost",
@@ -30,15 +30,20 @@ def get_db_connection():
     )
 
 
-# Проверка является ли пользователь администратором
+# Функция проверки прав администратора
 async def is_admin(chat_id) -> bool:
     try:
+        # Устанавливаем соединение с БД
         with get_db_connection() as conn:
+            # Создаем курсор
             with conn.cursor() as cur:
-                cur.execute("SELECT id FROM admins WHERE chat_id = %s", (str(chat_id),))
+                # Проверяем наличие id пользователя в таблице admins
+                cur.execute("SELECT id FROM admins WHERE chat_id = %s",
+                            (str(chat_id),))
+                # Возвращаем True если пользователь найден
                 return cur.fetchone() is not None
     except Exception as e:
-        logger.error(f"Ошибка при проверке администратора: {e}")
+        logger.error(f"Ошибка при проверке администратора: {e}") # Логируем ошибку
         return False
 
 
@@ -56,7 +61,7 @@ class CurrencyStates(StatesGroup):
 # Обработчик команды /start
 @dp.message(Command("start"))
 async def start(message: types.Message):
-    # Получаем список доступных команд
+    # Формируем список команд в зависимости от прав пользователя
     # Для администратора
     if await is_admin(message.chat.id):
         commands = [
@@ -66,7 +71,7 @@ async def start(message: types.Message):
             types.BotCommand(command="convert", description="Конвертация валюты"),
             types.BotCommand(command="help", description="Доступные команды")
         ]
-    # Для остальных обычных пользователей
+    # Для обычных пользователей
     else:
         commands = [
             types.BotCommand(command="start", description="Начало работы"),
@@ -75,18 +80,20 @@ async def start(message: types.Message):
             types.BotCommand(command="help", description="Доступные команды")
         ]
 
-    # Определяем, какому чату показывать список
+    # Определяем, какому именно чату показывать список
     scope = types.BotCommandScopeChat(chat_id=message.chat.id)
     # Определяем, какие команды показывать
     await bot.set_my_commands(commands, scope=scope)
 
     await message.answer("Привет!🤗\n"
-                         "Обратись к 'Меню' или используй /help для просмотра доступных команд")
+                         "Обратись к 'Меню' или используй "
+                         "/help для просмотра доступных команд")
 
 
 # Обработчик команды /help
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
+    # Формируем список доступных команд в зависимости от прав
     if await is_admin(message.chat.id):
         text = (
             "Доступные команды:\n"
@@ -105,21 +112,21 @@ async def cmd_help(message: types.Message):
     await message.answer(text)
 
 
-# Обработчик команды управления валютами
+# Обработчик команды управления валютами (только для админов)
 @dp.message(Command("manage_currency"))
 async def manage_currency(message: types.Message):
     if not await is_admin(message.chat.id):
         await message.answer("Нет доступа к команде")
         return
 
-    # Создаем клавиатуру с кнопками
+    # Создаем клавиатуру с действиями для администратора
     builder = ReplyKeyboardBuilder()
     builder.add(
         types.KeyboardButton(text="Добавить валюту"),
         types.KeyboardButton(text="Удалить валюту"),
         types.KeyboardButton(text="Изменить курс валюты")
     )
-    builder.adjust(3)  # 3 кнопки в один ряд
+    builder.adjust(3)  # Располагаем 3 кнопки в один ряд
 
     await message.answer(
         "Выберите действие:",
@@ -137,9 +144,10 @@ async def add_currency_start(message: types.Message, state: FSMContext):
 # Обработчик ввода названия валюты для добавления
 @dp.message(CurrencyStates.waiting_for_currency_name)
 async def add_currency_name(message: types.Message, state: FSMContext):
+    # Приводим к верхнему регистру и убираем пробелы
     currency_name = message.text.upper().strip()
 
-    # Проверка: только буквы, длина от 2 до 5
+    # Валидация ввода: только буквы, длина от 2 до 5
     if not currency_name.isalpha() or not (2 <= len(currency_name) <= 5):
         await message.answer(
             "⛔ Название валюты должно содержать только буквы (от 2 до 5 символов)."
@@ -159,6 +167,7 @@ async def add_currency_name(message: types.Message, state: FSMContext):
                     await state.clear()
                     return
 
+        # Сохраняем название валюты в состоянии
         await state.update_data(currency_name=currency_name)
         await message.answer("Введите курс к рублю:")
         await state.set_state(CurrencyStates.waiting_for_currency_rate)
@@ -175,26 +184,27 @@ async def add_currency_rate(message: types.Message, state: FSMContext):
     try:
         # Преобразуем ввод в число и заменяем запятую на точку
         rate = float(message.text.replace(",", "."))
+        # Проверка на положительное значение
         if rate <= 0:
             raise ValueError
 
         data = await state.get_data()
         currency_name = data['currency_name']
 
-        # Сохранение валюты в базу данных
+        # Сохраняем валюту в базу данных
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO currencies (currency_name, rate) VALUES (%s, %s)",
-                    (currency_name, rate)
+                    "INSERT INTO currencies (currency_name, rate) "
+                    "VALUES (%s, %s)",(currency_name, rate)
                 )
-                conn.commit()
+                conn.commit() # Фиксируем изменения
 
         await message.answer(
             f"Валюта {currency_name} успешно добавлена",
-            reply_markup=types.ReplyKeyboardRemove()
+            reply_markup=types.ReplyKeyboardRemove() # Убираем клавиатуру
         )
-        await state.clear()
+        await state.clear() # Сбрасываем состояние
 
     except ValueError:
         await message.answer("Пожалуйста, введите корректное число (больше 0):")
@@ -202,6 +212,7 @@ async def add_currency_rate(message: types.Message, state: FSMContext):
         logger.error(f"Ошибка при добавлении валюты: {e}")
         await message.answer("Произошла ошибка, попробуйте позже")
         await state.clear()
+
 
 # Обработчик кнопки "Удалить валюту"
 @dp.message(F.text == "Удалить валюту")
@@ -218,11 +229,12 @@ async def delete_currency(message: types.Message, state: FSMContext):
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                # Удаляем валюту из БД
                 cur.execute(
                     "DELETE FROM currencies WHERE currency_name = %s",
                     (currency_name,)
                 )
-                deleted_rows = cur.rowcount
+                deleted_rows = cur.rowcount # Получаем количество удаленных строк
                 conn.commit()
 
         if deleted_rows > 0:
@@ -242,6 +254,7 @@ async def delete_currency(message: types.Message, state: FSMContext):
     finally:
         await state.clear()
 
+
 # Обработчик кнопки "Изменить курс валюты"
 @dp.message(F.text == "Изменить курс валюты")
 async def update_currency_start(message: types.Message, state: FSMContext):
@@ -254,7 +267,7 @@ async def update_currency_start(message: types.Message, state: FSMContext):
 async def update_currency_name(message: types.Message, state: FSMContext):
     currency_name = message.text.upper().strip()
 
-    # Проверка существования валюты
+    # Проверка существования валюты в БД
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -281,7 +294,6 @@ async def update_currency_name(message: types.Message, state: FSMContext):
 @dp.message(CurrencyStates.waiting_for_currency_rate_to_update)
 async def update_currency_rate(message: types.Message, state: FSMContext):
     try:
-        # Преобразуем ввод в число и заменяем запятую на точку
         rate = float(message.text.replace(",", "."))
         if rate <= 0:
             raise ValueError
@@ -293,8 +305,8 @@ async def update_currency_rate(message: types.Message, state: FSMContext):
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "UPDATE currencies SET rate = %s WHERE currency_name = %s",
-                    (rate, currency_name)
+                    "UPDATE currencies SET rate = %s "
+                    "WHERE currency_name = %s",(rate, currency_name)
                 )
                 conn.commit()
 
@@ -318,6 +330,7 @@ async def get_currencies(message: types.Message):
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                # Получаем все существующие в БД валюты
                 cur.execute("SELECT currency_name, rate FROM currencies ORDER BY currency_name")
                 currencies = cur.fetchall()
 
@@ -325,6 +338,7 @@ async def get_currencies(message: types.Message):
             await message.answer("Нет доступных валют")
             return
 
+        # Формируем ответ с форматированием
         response = "Список доступных валют:\n\n"
         for currency in currencies:
             response += f"{currency[0]} - {currency[1]:.2f} руб.\n"
@@ -351,6 +365,7 @@ async def convert_currency_name(message: types.Message, state: FSMContext):
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                # Получаем курс валюты из БД
                 cur.execute(
                     "SELECT rate FROM currencies WHERE currency_name = %s",
                     (currency_name,)
@@ -362,7 +377,7 @@ async def convert_currency_name(message: types.Message, state: FSMContext):
                     await state.clear()
                     return
 
-                # Явно сохраняем данные
+                # Сохраняем данные для конвертации
                 await state.update_data({
                     'currency_name': currency_name,
                     'rate': float(result[0])  # Преобразуем numeric в float
@@ -380,17 +395,15 @@ async def convert_currency_name(message: types.Message, state: FSMContext):
 @dp.message(CurrencyStates.waiting_for_amount_to_convert)
 async def convert_amount(message: types.Message, state: FSMContext):
     try:
-        # Получаем данные из состояния
         data = await state.get_data()
 
-        # Преобразуем ввод в число и заменяем запятую на точку
         amount = float(message.text.replace(",", "."))
         if amount <= 0:
             raise ValueError
 
         currency_name = data['currency_name']
         rate = data['rate']
-        total = amount * rate
+        total = amount * rate # Вычисляем результат конвертации
 
         await message.answer(
             f"{amount} {currency_name} = {total:.2f} руб."
@@ -405,11 +418,12 @@ async def convert_amount(message: types.Message, state: FSMContext):
         await state.clear()
 
 
+# Основная асинхронная функция для запуска бота
 async def main() -> None:
-    # Запускаем бота (бесконечный цикл опроса серверов на новые сообщения)
+    # Запускаем бесконечный цикл опроса серверов на новые сообщения
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     import asyncio
-    # Запускает асинхронную функцию main()
+    # Запускаем асинхронную функцию main()
     asyncio.run(main())
