@@ -31,7 +31,7 @@ def get_db_connection():
 
 
 # Проверка является ли пользователь администратором
-async def is_admin(chat_id: str) -> bool:
+async def is_admin(chat_id) -> bool:
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -142,7 +142,7 @@ async def add_currency_name(message: types.Message, state: FSMContext):
     # Проверка: только буквы, длина от 2 до 5
     if not currency_name.isalpha() or not (2 <= len(currency_name) <= 5):
         await message.answer(
-            "⛔ Название валюты должно содержать только латинские буквы (от 2 до 5 символов)."
+            "⛔ Название валюты должно содержать только буквы (от 2 до 5 символов)."
         )
         return
 
