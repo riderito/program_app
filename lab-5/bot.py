@@ -194,14 +194,13 @@ async def add_currency_rate(message: types.Message, state: FSMContext):
             f"Валюта {currency_name} успешно добавлена",
             reply_markup=types.ReplyKeyboardRemove()
         )
+        await state.clear()
 
     except ValueError:
-        await message.answer("Пожалуйста, введите корректное число (больше 0)")
-        return
+        await message.answer("Пожалуйста, введите корректное число (больше 0):")
     except Exception as e:
         logger.error(f"Ошибка при добавлении валюты: {e}")
         await message.answer("Произошла ошибка, попробуйте позже")
-    finally:
         await state.clear()
 
 # Обработчик кнопки "Удалить валюту"
@@ -303,14 +302,13 @@ async def update_currency_rate(message: types.Message, state: FSMContext):
             f"Курс валюты {currency_name} успешно обновлен",
             reply_markup=types.ReplyKeyboardRemove()
         )
+        await state.clear()
 
     except ValueError:
-        await message.answer("Пожалуйста, введите корректное число (больше 0)")
-        return
+        await message.answer("Пожалуйста, введите корректное число (больше 0):")
     except Exception as e:
         logger.error(f"Ошибка при обновлении курса: {e}")
         await message.answer("Произошла ошибка, попробуйте позже")
-    finally:
         await state.clear()
 
 
@@ -397,14 +395,13 @@ async def convert_amount(message: types.Message, state: FSMContext):
         await message.answer(
             f"{amount} {currency_name} = {total:.2f} руб."
         )
+        await state.clear()
 
     except ValueError:
-        await message.answer("Пожалуйста, введите корректную сумму (больше 0)")
-        return
+        await message.answer("Пожалуйста, введите корректную сумму (больше 0):")
     except Exception as e:
         logger.error(f"Ошибка при конвертации: {e}")
         await message.answer("Произошла ошибка, попробуйте позже")
-    finally:
         await state.clear()
 
 
