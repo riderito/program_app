@@ -137,6 +137,9 @@ async def manage_currency(message: types.Message):
 # Обработчик кнопки "Добавить валюту"
 @dp.message(F.text == "Добавить валюту")
 async def add_currency_start(message: types.Message, state: FSMContext):
+    if not await is_admin(message.chat.id):
+        await message.answer("Нет доступа к команде")
+        return
     await message.answer("Введите название валюты:")
     await state.set_state(CurrencyStates.waiting_for_currency_name)
 
@@ -217,6 +220,9 @@ async def add_currency_rate(message: types.Message, state: FSMContext):
 # Обработчик кнопки "Удалить валюту"
 @dp.message(F.text == "Удалить валюту")
 async def delete_currency_start(message: types.Message, state: FSMContext):
+    if not await is_admin(message.chat.id):
+        await message.answer("Нет доступа к команде")
+        return
     await message.answer("Введите название валюты для удаления:")
     await state.set_state(CurrencyStates.waiting_for_currency_to_delete)
 
@@ -258,6 +264,9 @@ async def delete_currency(message: types.Message, state: FSMContext):
 # Обработчик кнопки "Изменить курс валюты"
 @dp.message(F.text == "Изменить курс валюты")
 async def update_currency_start(message: types.Message, state: FSMContext):
+    if not await is_admin(message.chat.id):
+        await message.answer("Нет доступа к команде")
+        return
     await message.answer("Введите название валюты:")
     await state.set_state(CurrencyStates.waiting_for_currency_to_update)
 
