@@ -30,6 +30,17 @@ def get_db_connection():
     )
 
 
+# Класс состояний FSM для управления валютами
+class CurrencyStates(StatesGroup):
+    waiting_for_currency_name = State()
+    waiting_for_currency_rate = State()
+    waiting_for_currency_to_delete = State()
+    waiting_for_currency_to_update = State()
+    waiting_for_currency_rate_to_update = State()
+    waiting_for_currency_to_convert = State()
+    waiting_for_amount_to_convert = State()
+
+
 # Функция проверки прав администратора
 async def is_admin(chat_id) -> bool:
     try:
@@ -45,17 +56,6 @@ async def is_admin(chat_id) -> bool:
     except Exception as e:
         logger.error(f"Ошибка при проверке администратора: {e}") # Логируем ошибку
         return False
-
-
-# Класс состояний FSM для управления валютами
-class CurrencyStates(StatesGroup):
-    waiting_for_currency_name = State()
-    waiting_for_currency_rate = State()
-    waiting_for_currency_to_delete = State()
-    waiting_for_currency_to_update = State()
-    waiting_for_currency_rate_to_update = State()
-    waiting_for_currency_to_convert = State()
-    waiting_for_amount_to_convert = State()
 
 
 # Обработчик команды /start
