@@ -6,7 +6,7 @@ from aiogram.filters import Command # Фильтр для обработки к�
 from aiogram.fsm.context import FSMContext # Для хранения промежуточных данных
 from aiogram.fsm.state import State, StatesGroup # Базовые классы для создания состояний
 import psycopg2 # Для работы с PostgreSQL
-import httpx # Асинхронный HTTP-клиент для запросов к внешним API
+import aiohttp # Асинхронный HTTP-клиент для запросов к внешним API
 
 # Настройка логирования: выводится информация в консоль
 logging.basicConfig(level=logging.INFO)
@@ -277,19 +277,20 @@ EXCHANGE_SERVICE_URL = "http://127.0.0.1:5000/rate"
 async def get_exchange_rate(currency: str) -> float:
     try:
         # Создаётся асинхронный HTTP-клиент
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                EXCHANGE_SERVICE_URL, # URL сервиса курсов валют
-                params={"currency": currency}, # Параметры запроса
-                timeout=5.0 # Максимальное время ожидания ответа
-            )
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                    EXCHANGE_SERVICE_URL,
+                    params={"currency": currency},
+                    timeout=aiohttp.ClientTimeout(total=5.0)
+            ) as response:
 
-            if response.status_code == 200:
-                return response.json()["rate"]
-            elif response.status_code == 400:
-                raise ValueError("Неизвестная валюта")
-            else:
-                raise ValueError("Ошибка сервиса курсов")
+                if response.status == 200:
+                    data = await response.json()
+                    return data["rate"]
+                elif response.status == 400:
+                    raise ValueError("Неизвестная валюта")
+                else:
+                    raise ValueError("Ошибка сервиса курсов")
 
     except Exception as e:
         logger.error(f"Ошибка при получении курса: {e}")
