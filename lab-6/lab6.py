@@ -198,7 +198,10 @@ async def add_currency_rate(message: types.Message, state: FSMContext):
             payload = {"currency_name": currency_name, "rate": rate}
             async with session.post(f"{CURRENCY_MANAGER_URL}/currencies", json=payload) as resp:
                 if resp.status == 201:
-                    await message.answer(f"Валюта {currency_name} успешно добавлена", reply_markup=types.ReplyKeyboardRemove())
+                    await message.answer(
+                        f"Валюта {currency_name} успешно добавлена",
+                        reply_markup=types.ReplyKeyboardRemove()
+                    )
                 else:
                     await message.answer("Произошла ошибка при добавлении валюты")
         except Exception as e:
