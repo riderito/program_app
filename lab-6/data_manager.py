@@ -31,7 +31,10 @@ def convert():
     cur = conn.cursor()
 
     # Ищем курс нужной валюты
-    cur.execute("SELECT rate FROM currencies WHERE currency_name = %s", (currency_name,))
+    cur.execute(
+        "SELECT rate FROM currencies WHERE currency_name = %s",
+        (currency_name,)
+    )
     row = cur.fetchone()
     if not row:
         return jsonify({'error': 'Currency not found'}), 404  # Ошибка, если нет такой валюты
@@ -45,8 +48,11 @@ def convert():
 def get_currencies():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT currency_name, rate FROM currencies")  # Получаем все валюты
-    currencies = [{'currency_name': row[0], 'rate': row[1]} for row in cur.fetchall()]  # Преобразуем в список словарей
+
+    # Получаем все валюты
+    cur.execute("SELECT currency_name, rate FROM currencies")
+    # Преобразуем в список словарей
+    currencies = [{'currency_name': row[0], 'rate': row[1]} for row in cur.fetchall()]
     return jsonify(currencies), 200
 
 
@@ -57,7 +63,10 @@ def get_currency(currency_name):
     cur = conn.cursor()
 
     # Получаем валюту по имени
-    cur.execute("SELECT currency_name, rate FROM currencies WHERE currency_name = %s", (currency_name.upper(),))
+    cur.execute(
+        "SELECT currency_name, rate FROM currencies WHERE currency_name = %s",
+        (currency_name.upper(),)
+    )
     row = cur.fetchone()
 
     if not row:
@@ -69,4 +78,3 @@ def get_currency(currency_name):
 # Запуск Flask-приложения
 if __name__ == '__main__':
     app.run(port=5002)
-

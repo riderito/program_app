@@ -25,7 +25,10 @@ def get_db():
 def get_currency(currency_name):
     conn = get_db()  # Устанавливаем соединение с БД
     cur = conn.cursor()  # Создаём курсор для выполнения SQL-запросов
-    cur.execute("SELECT currency_name, rate FROM currencies WHERE currency_name = %s", (currency_name,))
+    cur.execute(
+        "SELECT currency_name, rate FROM currencies WHERE currency_name = %s",
+        (currency_name,)
+    )
     row = cur.fetchone()  # Получаем одну строку результата
     conn.close()  # Закрываем соединение
     if row:
@@ -39,16 +42,21 @@ def add_currency():
     data = request.json  # Получаем JSON-данные из запроса
     name = data["currency_name"]
     rate = data["rate"]
+
     conn = get_db()
     cur = conn.cursor()
 
     # Проверка: есть ли такая валюта уже
     cur.execute("SELECT * FROM currencies WHERE currency_name = %s", (name,))
     if cur.fetchone():
-        return jsonify({"error": "Currency already exists"}), 400  # Возвращаем ошибку, если валюта уже есть
+        # Возвращаем ошибку, если валюта уже есть
+        return jsonify({"error": "Currency already exists"}), 400
 
     # Вставляем новую валюту
-    cur.execute("INSERT INTO currencies (currency_name, rate) VALUES (%s, %s)", (name, rate))
+    cur.execute(
+        "INSERT INTO currencies (currency_name, rate) VALUES (%s, %s)",
+        (name, rate)
+    )
     conn.commit()  # Сохраняем изменения
     conn.close()
     return jsonify({"status": "OK"}), 201  # Возвращаем статус создания (201)
@@ -61,12 +69,18 @@ def delete_currency(currency_name):
     cur = conn.cursor()
 
     # Проверка: существует ли валюта
-    cur.execute("SELECT * FROM currencies WHERE currency_name = %s", (currency_name,))
+    cur.execute("SELECT * FROM currencies WHERE currency_name = %s",
+                (currency_name,)
+    )
     if not cur.fetchone():
-        return jsonify({"error": "Currency not found"}), 404  # Если не существует — ошибка
+        # Если не существует — ошибка
+        return jsonify({"error": "Currency not found"}), 404
 
     # Удаление валюты
-    cur.execute("DELETE FROM currencies WHERE currency_name = %s", (currency_name,))
+    cur.execute(
+        "DELETE FROM currencies WHERE currency_name = %s",
+        (currency_name,)
+    )
     conn.commit()
     conn.close()
     return jsonify({"status": "Deleted"}), 200
@@ -82,12 +96,18 @@ def update_currency(currency_name):
     cur = conn.cursor()
 
     # Проверка: есть ли валюта
-    cur.execute("SELECT * FROM currencies WHERE currency_name = %s", (currency_name,))
+    cur.execute(
+        "SELECT * FROM currencies WHERE currency_name = %s",
+        (currency_name,)
+    )
     if not cur.fetchone():
         return jsonify({"error": "Currency not found"}), 404
 
     # Обновление курса
-    cur.execute("UPDATE currencies SET rate = %s WHERE currency_name = %s", (rate, currency_name))
+    cur.execute(
+        "UPDATE currencies SET rate = %s WHERE currency_name = %s",
+        (rate, currency_name)
+    )
     conn.commit()
     conn.close()
     return jsonify({"status": "Updated"}), 200
@@ -107,4 +127,3 @@ def check_admin(chat_id):
 # Запуск Flask-приложения
 if __name__ == "__main__":
     app.run(port=5001)
-

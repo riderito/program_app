@@ -24,6 +24,7 @@ dp = Dispatcher()
 CURRENCY_MANAGER_URL = "http://127.0.0.1:5001"
 DATA_MANAGER_URL = "http://127.0.0.1:5002"
 
+
 # Определение состояний для управления валютами с использованием FSM
 class CurrencyStates(StatesGroup):
     waiting_for_currency_name = State()  # Ожидание ввода названия валюты
@@ -33,6 +34,7 @@ class CurrencyStates(StatesGroup):
     waiting_for_currency_rate_to_update = State()  # Ожидание ввода нового курса валюты
     waiting_for_currency_to_convert = State()  # Ожидание ввода валюты для конвертации
     waiting_for_amount_to_convert = State()  # Ожидание ввода суммы для конвертации
+
 
 # Функция для проверки, является ли пользователь администратором
 async def is_admin(chat_id: int) -> bool:
@@ -46,6 +48,7 @@ async def is_admin(chat_id: int) -> bool:
         except Exception as e:
             logger.error(f"Ошибка при проверке администратора: {e}")
     return False
+
 
 # Обработчик команды /start
 @dp.message(Command("start"))
@@ -74,7 +77,9 @@ async def start(message: types.Message):
     await bot.set_my_commands(commands, scope=scope)
 
     # Приветственное сообщение
-    await message.answer("Привет! 🤗\nОбратись к 'Меню' или используй /help для просмотра доступных команд")
+    await message.answer("Привет! 🤗\nОбратись к 'Меню' "
+                         "или используй /help для просмотра доступных команд")
+
 
 # Обработчик команды /help
 @dp.message(Command("help"))
@@ -100,6 +105,7 @@ async def cmd_help(message: types.Message):
     # Отправка списка команд
     await message.answer(text)
 
+
 # Обработчик команды /manage_currency
 @dp.message(Command("manage_currency"))
 async def manage_currency(message: types.Message):
@@ -123,6 +129,7 @@ async def manage_currency(message: types.Message):
         reply_markup=builder.as_markup(resize_keyboard=True)
     )
 
+
 # Обработчик кнопки "Добавить валюту"
 @dp.message(F.text == "Добавить валюту")
 async def add_currency_start(message: types.Message, state: FSMContext):
@@ -134,6 +141,7 @@ async def add_currency_start(message: types.Message, state: FSMContext):
     await message.answer("Введите название валюты:")
     # Установка состояния ожидания ввода названия валюты
     await state.set_state(CurrencyStates.waiting_for_currency_name)
+
 
 # Обработчик ввода названия валюты для добавления
 @dp.message(CurrencyStates.waiting_for_currency_name)
@@ -167,6 +175,7 @@ async def add_currency_name(message: types.Message, state: FSMContext):
     # Установка состояния ожидания ввода курса валюты
     await state.set_state(CurrencyStates.waiting_for_currency_rate)
 
+
 # Обработчик ввода курса валюты для добавления
 @dp.message(CurrencyStates.waiting_for_currency_rate)
 async def add_currency_rate(message: types.Message, state: FSMContext):
@@ -198,6 +207,7 @@ async def add_currency_rate(message: types.Message, state: FSMContext):
     # Очистка состояния
     await state.clear()
 
+
 # Обработчик кнопки "Удалить валюту"
 @dp.message(F.text == "Удалить валюту")
 async def delete_currency_start(message: types.Message, state: FSMContext):
@@ -210,6 +220,7 @@ async def delete_currency_start(message: types.Message, state: FSMContext):
     # Установка состояния ожидания ввода названия валюты для удаления
     await state.set_state(CurrencyStates.waiting_for_currency_to_delete)
 
+
 # Обработчик ввода названия валюты для удаления
 @dp.message(CurrencyStates.waiting_for_currency_to_delete)
 async def delete_currency(message: types.Message, state: FSMContext):
@@ -219,15 +230,18 @@ async def delete_currency(message: types.Message, state: FSMContext):
     # Отправка запроса на удаление валюты
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.delete(f"{CURRENCY_MANAGER_URL}/currencies/{currency_name            }") as resp:
+            async with session.delete(f"{CURRENCY_MANAGER_URL}/currencies/{currency_name}") as resp:
                 if resp.status == 200:
-                    await message.answer(f"Валюта {currency_name} успешно удалена", reply_markup=types.ReplyKeyboardRemove())
+                    await message.answer(
+                        f"Валюта {currency_name} успешно удалена",
+                        reply_markup=types.ReplyKeyboardRemove())
                 else:
                     await message.answer("Валюта не найдена или произошла ошибка")
         except Exception as e:
             logger.error(f"Ошибка при удалении валюты: {e}")
             await message.answer("Произошла ошибка, попробуйте позже")
     await state.clear()
+
 
 # Обработчик кнопки "Изменить курс валюты"
 @dp.message(F.text == "Изменить курс валюты")
@@ -238,6 +252,7 @@ async def update_currency_start(message: types.Message, state: FSMContext):
     await message.answer("Введите название валюты для изменения курса:")
     await state.set_state(CurrencyStates.waiting_for_currency_to_update)
 
+
 # Обработчик ввода названия валюты для изменения курса
 @dp.message(CurrencyStates.waiting_for_currency_to_update)
 async def update_currency_name(message: types.Message, state: FSMContext):
@@ -245,6 +260,7 @@ async def update_currency_name(message: types.Message, state: FSMContext):
     await state.update_data(currency_name=currency_name)
     await message.answer("Введите новый курс валюты:")
     await state.set_state(CurrencyStates.waiting_for_currency_rate_to_update)
+
 
 # Обработчик ввода нового курса
 @dp.message(CurrencyStates.waiting_for_currency_rate_to_update)
@@ -263,15 +279,21 @@ async def update_currency_rate(message: types.Message, state: FSMContext):
     async with aiohttp.ClientSession() as session:
         try:
             payload = {"rate": rate}
-            async with session.put(f"{CURRENCY_MANAGER_URL}/currencies/{currency_name}", json=payload) as resp:
+            async with session.put(
+                    f"{CURRENCY_MANAGER_URL}/currencies/{currency_name}",
+                    json=payload
+            ) as resp:
                 if resp.status == 200:
-                    await message.answer(f"Курс валюты {currency_name} успешно обновлен", reply_markup=types.ReplyKeyboardRemove())
+                    await message.answer(
+                        f"Курс валюты {currency_name} успешно обновлен",
+                        reply_markup=types.ReplyKeyboardRemove())
                 else:
                     await message.answer("Валюта не найдена или произошла ошибка")
         except Exception as e:
             logger.error(f"Ошибка при обновлении курса: {e}")
             await message.answer("Произошла ошибка, попробуйте позже")
     await state.clear()
+
 
 # Обработчик команды /get_currencies
 @dp.message(Command("get_currencies"))
@@ -292,11 +314,13 @@ async def get_currencies(message: types.Message):
             logger.error(f"Ошибка при получении валют: {e}")
             await message.answer("Произошла ошибка, попробуйте позже")
 
+
 # Обработчик команды /convert
 @dp.message(Command("convert"))
 async def convert_start(message: types.Message, state: FSMContext):
     await message.answer("Введите название валюты, которую хотите конвертировать:")
     await state.set_state(CurrencyStates.waiting_for_currency_to_convert)
+
 
 # Обработчик ввода валюты для конвертации
 @dp.message(CurrencyStates.waiting_for_currency_to_convert)
@@ -305,6 +329,7 @@ async def convert_currency_name(message: types.Message, state: FSMContext):
     await state.update_data(currency_name=currency_name)
     await message.answer("Введите сумму в этой валюте:")
     await state.set_state(CurrencyStates.waiting_for_amount_to_convert)
+
 
 # Обработчик ввода суммы и выполнение конвертации
 @dp.message(CurrencyStates.waiting_for_amount_to_convert)
@@ -328,7 +353,10 @@ async def convert_amount(message: types.Message, state: FSMContext):
                     result = await resp.json()
                     converted = result.get("converted")
                     if converted is not None:
-                        await message.answer(f"{amount} {currency_name} = {converted} RUB", reply_markup=types.ReplyKeyboardRemove())
+                        await message.answer(
+                            f"{amount} {currency_name} = {converted} RUB",
+                            reply_markup=types.ReplyKeyboardRemove()
+                        )
                     else:
                         await message.answer("Ошибка при конвертации")
                 else:
@@ -338,13 +366,11 @@ async def convert_amount(message: types.Message, state: FSMContext):
             await message.answer("Произошла ошибка, попробуйте позже")
     await state.clear()
 
+
 # Запуск бота
 async def main():
-    logger.info("Запуск бота...")
     await dp.start_polling(bot)
 
+
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Бот остановлен.")
+    asyncio.run(main())
