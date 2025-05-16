@@ -7,7 +7,6 @@ from aiogram.fsm.context import FSMContext  # Контекст для управ
 from aiogram.fsm.state import State, StatesGroup  # Определение состояний FSM
 from aiogram.utils.keyboard import ReplyKeyboardBuilder  # Создание клавиатур
 import aiohttp  # Асинхронные HTTP-запросы
-import asyncio  # Асинхронное программирование
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -25,7 +24,7 @@ CURRENCY_MANAGER_URL = "http://127.0.0.1:5001"
 DATA_MANAGER_URL = "http://127.0.0.1:5002"
 
 
-# Определение состояний для управления валютами с использованием FSM
+# Определение состояний для управления валютами
 class CurrencyStates(StatesGroup):
     waiting_for_currency_name = State()  # Ожидание ввода названия валюты
     waiting_for_currency_rate = State()  # Ожидание ввода курса валюты
@@ -138,7 +137,7 @@ async def add_currency_start(message: types.Message, state: FSMContext):
         await message.answer("Нет доступа к команде")
         return
     # Запрос ввода названия валюты
-    await message.answer("Введите название валюты:")
+    await message.answer("Введите название валюты:", reply_markup=types.ReplyKeyboardRemove())
     # Установка состояния ожидания ввода названия валюты
     await state.set_state(CurrencyStates.waiting_for_currency_name)
 
@@ -195,15 +194,15 @@ async def add_currency_rate(message: types.Message, state: FSMContext):
     # Отправка запроса на добавление новой валюты
     async with aiohttp.ClientSession() as session:
         try:
-            payload = {"currency_name": currency_name, "rate": rate}
-            async with session.post(f"{CURRENCY_MANAGER_URL}/currencies", json=payload) as resp:
+            async with session.post(
+                    f"{CURRENCY_MANAGER_URL}/load",
+                    json={"currency_name": currency_name, "rate": rate}
+            ) as resp:
                 if resp.status == 201:
-                    await message.answer(
-                        f"Валюта {currency_name} успешно добавлена",
-                        reply_markup=types.ReplyKeyboardRemove()
-                    )
+                    await message.answer(f"✅ Валюта {currency_name} успешно добавлена")
                 else:
-                    await message.answer("Произошла ошибка при добавлении валюты")
+                    error = await resp.text()
+                    await message.answer(f"❌ Ошибка при добавлении валюты: {error}")
         except Exception as e:
             logger.error(f"Ошибка при добавлении валюты: {e}")
             await message.answer("Произошла ошибка, попробуйте позже")
@@ -219,7 +218,10 @@ async def delete_currency_start(message: types.Message, state: FSMContext):
         await message.answer("Нет доступа к команде")
         return
     # Запрос ввода названия валюты для удаления
-    await message.answer("Введите название валюты для удаления:")
+    await message.answer(
+        "Введите название валюты для удаления:",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
     # Установка состояния ожидания ввода названия валюты для удаления
     await state.set_state(CurrencyStates.waiting_for_currency_to_delete)
 
@@ -233,13 +235,17 @@ async def delete_currency(message: types.Message, state: FSMContext):
     # Отправка запроса на удаление валюты
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.delete(f"{CURRENCY_MANAGER_URL}/currencies/{currency_name}") as resp:
+            async with session.post(
+                    f"{CURRENCY_MANAGER_URL}/delete",
+                    json={"currency_name": currency_name}
+            ) as resp:
                 if resp.status == 200:
-                    await message.answer(
-                        f"Валюта {currency_name} успешно удалена",
-                        reply_markup=types.ReplyKeyboardRemove())
+                    await message.answer(f"✅ Валюта {currency_name} успешно удалена")
+                elif resp.status == 404:
+                    await message.answer(f"❌ Валюта {currency_name} не найдена")
                 else:
-                    await message.answer("Валюта не найдена или произошла ошибка")
+                    error = await resp.text()
+                    await message.answer(f"❌ Ошибка при удалении валюты: {error}")
         except Exception as e:
             logger.error(f"Ошибка при удалении валюты: {e}")
             await message.answer("Произошла ошибка, попробуйте позже")
@@ -252,7 +258,10 @@ async def update_currency_start(message: types.Message, state: FSMContext):
     if not await is_admin(message.chat.id):
         await message.answer("Нет доступа к команде")
         return
-    await message.answer("Введите название валюты для изменения курса:")
+    await message.answer(
+        "Введите название валюты для изменения курса:",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
     await state.set_state(CurrencyStates.waiting_for_currency_to_update)
 
 
@@ -260,6 +269,21 @@ async def update_currency_start(message: types.Message, state: FSMContext):
 @dp.message(CurrencyStates.waiting_for_currency_to_update)
 async def update_currency_name(message: types.Message, state: FSMContext):
     currency_name = message.text.upper().strip()
+
+    # Проверка, существует ли уже такая валюта
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(f"{CURRENCY_MANAGER_URL}/currencies/{currency_name}") as resp:
+                if resp.status != 200:
+                    await message.answer(f"❌ Валюта {currency_name} не найдена")
+                    await state.clear()
+                    return
+        except Exception as e:
+            logger.error(f"Ошибка при проверке валюты: {e}")
+            await message.answer("Произошла ошибка, попробуйте позже")
+            await state.clear()
+            return
+
     await state.update_data(currency_name=currency_name)
     await message.answer("Введите новый курс валюты:")
     await state.set_state(CurrencyStates.waiting_for_currency_rate_to_update)
@@ -281,17 +305,19 @@ async def update_currency_rate(message: types.Message, state: FSMContext):
 
     async with aiohttp.ClientSession() as session:
         try:
-            payload = {"rate": rate}
-            async with session.put(
-                    f"{CURRENCY_MANAGER_URL}/currencies/{currency_name}",
-                    json=payload
+            payload = {"currency_name": currency_name, "rate": rate}
+            async with session.post(
+                f"{CURRENCY_MANAGER_URL}/update_currency",
+                json=payload
             ) as resp:
                 if resp.status == 200:
                     await message.answer(
-                        f"Курс валюты {currency_name} успешно обновлен",
-                        reply_markup=types.ReplyKeyboardRemove())
+                        f"✅ Курс валюты {currency_name} успешно обновлен")
+                elif resp.status == 404:
+                    await message.answer(f"❌ Валюта {currency_name} не найдена")
                 else:
-                    await message.answer("Валюта не найдена или произошла ошибка")
+                    error = await resp.text()
+                    await message.answer(f"❌ Ошибка при обновлении курса: {error}")
         except Exception as e:
             logger.error(f"Ошибка при обновлении курса: {e}")
             await message.answer("Произошла ошибка, попробуйте позже")
@@ -303,16 +329,20 @@ async def update_currency_rate(message: types.Message, state: FSMContext):
 async def get_currencies(message: types.Message):
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.get(f"{CURRENCY_MANAGER_URL}/currencies") as resp:
+            async with session.get(f"{DATA_MANAGER_URL}/currencies") as resp:
                 if resp.status == 200:
-                    data = await resp.json()
-                    if data:
-                        currencies = "\n".join([f"{name}: {rate}" for name, rate in data.items()])
-                        await message.answer(f"Доступные валюты:\n{currencies}")
+                    currencies_list = await resp.json()
+                    if currencies_list:
+                        # Форматируем валюты в читаемый вид
+                        response = "Список доступных валют:\n\n"
+                        for curr in currencies_list:
+                            response += f"{curr['currency_name']} - {curr['rate']} руб.\n"
+                        await message.answer(response)
                     else:
-                        await message.answer("Список валют пуст.")
+                        await message.answer("Список валют пуст")
                 else:
-                    await message.answer("Ошибка при получении списка валют.")
+                    error = await resp.text()
+                    await message.answer(f"Ошибка сервера: {error}")
         except Exception as e:
             logger.error(f"Ошибка при получении валют: {e}")
             await message.answer("Произошла ошибка, попробуйте позже")
@@ -329,6 +359,21 @@ async def convert_start(message: types.Message, state: FSMContext):
 @dp.message(CurrencyStates.waiting_for_currency_to_convert)
 async def convert_currency_name(message: types.Message, state: FSMContext):
     currency_name = message.text.upper().strip()
+
+    # Проверка, существует ли уже такая валюта
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(f"{CURRENCY_MANAGER_URL}/currencies/{currency_name}") as resp:
+                if resp.status != 200:
+                    await message.answer(f"❌ Валюта {currency_name} не найдена")
+                    await state.clear()
+                    return
+        except Exception as e:
+            logger.error(f"Ошибка при проверке валюты: {e}")
+            await message.answer("Произошла ошибка, попробуйте позже")
+            await state.clear()
+            return
+
     await state.update_data(currency_name=currency_name)
     await message.answer("Введите сумму в этой валюте:")
     await state.set_state(CurrencyStates.waiting_for_amount_to_convert)
@@ -350,30 +395,36 @@ async def convert_amount(message: types.Message, state: FSMContext):
 
     async with aiohttp.ClientSession() as session:
         try:
-            params = {"currency": currency_name, "amount": amount}
-            async with session.get(f"{DATA_MANAGER_URL}/convert", params=params) as resp:
+            # Отправляем запрос на конвертацию
+            async with session.get(
+                    f"{DATA_MANAGER_URL}/convert",
+                    params={"currency_name": currency_name, "amount": amount}
+            ) as resp:
                 if resp.status == 200:
                     result = await resp.json()
-                    converted = result.get("converted")
-                    if converted is not None:
-                        await message.answer(
-                            f"{amount} {currency_name} = {converted} RUB",
-                            reply_markup=types.ReplyKeyboardRemove()
-                        )
-                    else:
-                        await message.answer("Ошибка при конвертации")
+                    converted = result.get('converted_amount')
+                    rate = result.get('rate')
+                    await message.answer(
+                        f" {amount} {currency_name} = {converted} RUB\n"
+                        f"Курс: 1 {currency_name} = {rate} RUB"
+                    )
+                elif resp.status == 404:
+                    await message.answer(f"❌ Валюта {currency_name} не найдена")
                 else:
-                    await message.answer("Ошибка при выполнении запроса конвертации")
+                    error = await resp.text()
+                    await message.answer(f"❌ Ошибка конвертации: {error}")
         except Exception as e:
             logger.error(f"Ошибка при конвертации: {e}")
             await message.answer("Произошла ошибка, попробуйте позже")
     await state.clear()
 
 
-# Запуск бота
+# Основная асинхронная функция для запуска бота
 async def main():
+    # Запускаем бесконечный цикл опроса серверов на новые сообщения
     await dp.start_polling(bot)
 
-
 if __name__ == "__main__":
+    import asyncio
+    # Запускаем асинхронную функцию main()
     asyncio.run(main())

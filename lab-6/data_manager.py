@@ -1,80 +1,109 @@
-# Импорт Flask и psycopg2
 from flask import Flask, request, jsonify
 import psycopg2
 
-# Создание Flask-приложения
 app = Flask(__name__)
 
-# Конфигурация для подключения к БД
+# Конфигурация подключения к PostgreSQL
 DB_CONFIG = {
     'host': 'localhost',
-    'port': 5433,
+    'port': 5432,
     'database': 'rpp',
     'user': 'postgres',
     'password': 'postgres'
 }
 
 
-# Функция подключения к PostgreSQL
-def get_db():
-    return psycopg2.connect(**DB_CONFIG)
+def get_db_connection():
+    """Устанавливает соединение с базой данных"""
+    try:
+        return psycopg2.connect(**DB_CONFIG)
+    except psycopg2.Error as e:
+        raise RuntimeError(f"Database connection failed: {e}")
 
 
-# Эндпоинт для конвертации валюты
-@app.route('/convert')
-def convert():
-    # Получаем параметры из URL: /convert?currency_name=USD&amount=100
-    currency_name = request.args.get('currency_name')
-    amount = float(request.args.get('amount'))  # Преобразуем в число
+@app.route('/convert', methods=['GET'])
+def convert_currency():
+    """Эндпоинт для конвертации валюты
 
-    conn = get_db()
-    cur = conn.cursor()
+    Параметры запроса:
+    - currency_name: название валюты (обязательный)
+    - amount: сумма для конвертации (обязательный)
 
-    # Ищем курс нужной валюты
-    cur.execute(
-        "SELECT rate FROM currencies WHERE currency_name = %s",
-        (currency_name,)
-    )
-    row = cur.fetchone()
-    if not row:
-        return jsonify({'error': 'Currency not found'}), 404  # Ошибка, если нет такой валюты
+    Возвращает:
+    - JSON с конвертированной суммой или сообщением об ошибке
+    """
+    try:
+        # Получаем и валидируем параметры
+        currency_name = request.args.get('currency_name')
+        amount_str = request.args.get('amount')
 
-    rate = row[0]
-    return jsonify({'converted': amount * rate}), 200  # Возвращаем результат
+        if not currency_name or not amount_str:
+            return jsonify({'error': 'Missing required parameters: currency_name and amount'}), 400
+
+        try:
+            amount = float(amount_str)
+            if amount <= 0:
+                raise ValueError
+        except ValueError:
+            return jsonify({'error': 'Amount must be a positive number'}), 400
+
+        conn = None
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                # Получаем курс валюты
+                cur.execute(
+                    "SELECT rate FROM currencies WHERE currency_name = %s",
+                    (currency_name.upper(),)
+                )
+                row = cur.fetchone()
+
+                if not row:
+                    return jsonify({'error': 'Currency not found'}), 404
+
+                rate = float(row[0])
+                converted_amount = amount * rate
+
+                return jsonify({
+                    'original_amount': amount,
+                    'currency': currency_name.upper(),
+                    'converted_amount': converted_amount,
+                    'rate': rate
+                }), 200
+
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+        finally:
+            if conn:
+                conn.close()
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
-# Эндпоинт для получения списка всех валют
-@app.route('/currencies')
-def get_currencies():
-    conn = get_db()
-    cur = conn.cursor()
+@app.route('/currencies', methods=['GET'])
+def get_all_currencies():
+    """Эндпоинт для получения списка всех валют
 
-    # Получаем все валюты
-    cur.execute("SELECT currency_name, rate FROM currencies")
-    # Преобразуем в список словарей
-    currencies = [{'currency_name': row[0], 'rate': row[1]} for row in cur.fetchall()]
-    return jsonify(currencies), 200
-
-
-# Эндпоинт для получения одной валюты
-@app.route('/currencies/<currency_name>', methods=['GET'])
-def get_currency(currency_name):
-    conn = get_db()
-    cur = conn.cursor()
-
-    # Получаем валюту по имени
-    cur.execute(
-        "SELECT currency_name, rate FROM currencies WHERE currency_name = %s",
-        (currency_name.upper(),)
-    )
-    row = cur.fetchone()
-
-    if not row:
-        return jsonify({'error': 'Currency not found'}), 404
-
-    return jsonify({'currency_name': row[0], 'rate': row[1]}), 200
+    Возвращает:
+    - JSON-массив всех валют с их курсами
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT currency_name, rate FROM currencies ORDER BY currency_name")
+            currencies = [
+                {'currency_name': row[0], 'rate': float(row[1])}
+                for row in cur.fetchall()
+            ]
+            return jsonify(currencies), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 
-# Запуск Flask-приложения
 if __name__ == '__main__':
-    app.run(port=5002)
+    app.run(port=5002, debug=True)
