@@ -13,39 +13,28 @@ DB_CONFIG = {
 }
 
 
+# Устанавливает и возвращает соединение с базой данных
 def get_db_connection():
-    """Устанавливает соединение с базой данных"""
-    try:
-        return psycopg2.connect(**DB_CONFIG)
-    except psycopg2.Error as e:
-        raise RuntimeError(f"Database connection failed: {e}")
+    return psycopg2.connect(**DB_CONFIG)
 
 
+# Эндпоинт для конвертации валюты
 @app.route('/convert', methods=['GET'])
 def convert_currency():
-    """Эндпоинт для конвертации валюты
-
-    Параметры запроса:
-    - currency_name: название валюты (обязательный)
-    - amount: сумма для конвертации (обязательный)
-
-    Возвращает:
-    - JSON с конвертированной суммой или сообщением об ошибке
-    """
     try:
         # Получаем и валидируем параметры
         currency_name = request.args.get('currency_name')
         amount_str = request.args.get('amount')
 
         if not currency_name or not amount_str:
-            return jsonify({'error': 'Missing required parameters: currency_name and amount'}), 400
+            return jsonify({'error': 'Отсутствуют обязательные параметры'}), 400
 
         try:
             amount = float(amount_str)
             if amount <= 0:
                 raise ValueError
         except ValueError:
-            return jsonify({'error': 'Amount must be a positive number'}), 400
+            return jsonify({'error': 'Сумма должна быть положительным числом'}), 400
 
         conn = None
         try:
@@ -59,7 +48,7 @@ def convert_currency():
                 row = cur.fetchone()
 
                 if not row:
-                    return jsonify({'error': 'Currency not found'}), 404
+                    return jsonify({'error': 'Валюта не найдена'}), 404
 
                 rate = float(row[0])
                 converted_amount = amount * rate
@@ -74,20 +63,16 @@ def convert_currency():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
         finally:
-            if conn:
+            if conn is not None:  # Проверяем, было ли создано соединение
                 conn.close()
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
+# Эндпоинт для получения списка всех валют
 @app.route('/currencies', methods=['GET'])
 def get_all_currencies():
-    """Эндпоинт для получения списка всех валют
-
-    Возвращает:
-    - JSON-массив всех валют с их курсами
-    """
     conn = None
     try:
         conn = get_db_connection()
@@ -101,7 +86,7 @@ def get_all_currencies():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        if conn:
+        if conn is not None:
             conn.close()
 
 

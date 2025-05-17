@@ -43,9 +43,11 @@ async def is_admin(chat_id: int) -> bool:
             async with session.get(f"{CURRENCY_MANAGER_URL}/is_admin/{chat_id}") as resp:
                 if resp.status == 200:
                     data = await resp.json()
+                    # Возвращаем значение is_admin из ответа (по умолчанию False)
                     return data.get("is_admin", False)
         except Exception as e:
             logger.error(f"Ошибка при проверке администратора: {e}")
+    # Возвращаем False, если статус не 200
     return False
 
 
@@ -303,12 +305,13 @@ async def update_currency_rate(message: types.Message, state: FSMContext):
     data = await state.get_data()
     currency_name = data['currency_name']
 
+    # Пробуем изменить курс валюты в БД
     async with aiohttp.ClientSession() as session:
         try:
-            payload = {"currency_name": currency_name, "rate": rate}
+            new_rate = {"currency_name": currency_name, "rate": rate}
             async with session.post(
                 f"{CURRENCY_MANAGER_URL}/update_currency",
-                json=payload
+                json=new_rate
             ) as resp:
                 if resp.status == 200:
                     await message.answer(
@@ -329,6 +332,7 @@ async def update_currency_rate(message: types.Message, state: FSMContext):
 async def get_currencies(message: types.Message):
     async with aiohttp.ClientSession() as session:
         try:
+            # Запрашиваем список всех существующих валют
             async with session.get(f"{DATA_MANAGER_URL}/currencies") as resp:
                 if resp.status == 200:
                     currencies_list = await resp.json()
@@ -423,6 +427,7 @@ async def convert_amount(message: types.Message, state: FSMContext):
 async def main():
     # Запускаем бесконечный цикл опроса серверов на новые сообщения
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     import asyncio

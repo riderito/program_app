@@ -14,59 +14,40 @@ DB_CONFIG = {
 }
 
 
+# Устанавливает и возвращает соединение с базой данных
 def get_db_connection():
-    """Устанавливает и возвращает соединение с базой данных.
-
-    Returns:
-        connection: Объект соединения с PostgreSQL
-    Raises:
-        RuntimeError: Если подключение не удалось
-    """
-    try:
-        return psycopg2.connect(**DB_CONFIG)
-    except psycopg2.Error as e:
-        raise RuntimeError(f"Database connection failed: {e}")
+    return psycopg2.connect(**DB_CONFIG)
 
 
+# Эндпоинт для добавления новой валюты
 @app.route('/load', methods=['POST'])
 def load_currency():
-    """Эндпоинт для добавления новой валюты.
-
-    Ожидает JSON в теле запроса:
-    {
-        "currency_name": "название валюты",
-        "rate": курс к рублю
-    }
-
-    Returns:
-        JSON ответ с статусом операции:
-        - 200 OK при успешном добавлении
-        - 400 если валюта уже существует
-        - 500 при ошибке сервера
-    """
+    conn = None  # Явно инициализируем переменную
     try:
-        # Получаем данные из запроса
+        # Получаем данные из запроса (название и курс к рублю)
         data = request.get_json()
         currency_name = data.get('currency_name')
         rate = data.get('rate')
 
+        conn = None  # Явно инициализируем переменную
+
         # Валидация входных данных
         if not currency_name or not rate:
-            return jsonify({'error': 'Missing required fields'}), 400
+            return jsonify({'error': 'Отсутствуют обязательные поля'}), 400
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        conn = get_db_connection()  # Устанавливаем соединение с БД
+        cur = conn.cursor()  # Создаём курсор для выполнения SQL-запросов
 
         # Проверяем существование валюты
-        cursor.execute(
+        cur.execute(
             "SELECT 1 FROM currencies WHERE currency_name = %s",
             (currency_name,)
         )
-        if cursor.fetchone():
-            return jsonify({'error': 'Currency already exists'}), 400
+        if cur.fetchone():
+            return jsonify({'error': 'Валюта уже существует'}), 400
 
         # Добавляем новую валюту
-        cursor.execute(
+        cur.execute(
             "INSERT INTO currencies (currency_name, rate) VALUES (%s, %s)",
             (currency_name, rate)
         )
@@ -77,47 +58,37 @@ def load_currency():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        conn.close()
+        if conn is not None:  # Проверяем, было ли создано соединение
+            conn.close()
 
 
+# Эндпоинт для обновления курса валюты
 @app.route('/update_currency', methods=['POST'])
 def update_currency():
-    """Эндпоинт для обновления курса валюты.
-
-    Ожидает JSON в теле запроса:
-    {
-        "currency_name": "название валюты",
-        "rate": новый курс к рублю
-    }
-
-    Returns:
-        JSON ответ с статусом операции:
-        - 200 OK при успешном обновлении
-        - 404 если валюта не найдена
-        - 500 при ошибке сервера
-    """
+    conn = None
     try:
+        # Получаем данные из запроса (название и курс к рублю)
         data = request.get_json()
         currency_name = data.get('currency_name')
         new_rate = data.get('rate')
 
         # Валидация входных данных
         if not currency_name or not new_rate:
-            return jsonify({'error': 'Missing required fields'}), 400
+            return jsonify({'error': 'Отсутствуют обязательные поля'}), 400
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cur = conn.cursor()
 
         # Проверяем существование валюты
-        cursor.execute(
+        cur.execute(
             "SELECT 1 FROM currencies WHERE currency_name = %s",
             (currency_name,)
         )
-        if not cursor.fetchone():
-            return jsonify({'error': 'Currency not found'}), 404
+        if not cur.fetchone():
+            return jsonify({'error': 'Валюта не найдена'}), 404
 
         # Обновляем курс
-        cursor.execute(
+        cur.execute(
             "UPDATE currencies SET rate = %s WHERE currency_name = %s",
             (new_rate, currency_name)
         )
@@ -128,45 +99,36 @@ def update_currency():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        conn.close()
+        if conn is not None:  # Проверяем, было ли создано соединение
+            conn.close()
 
 
+# Эндпоинт для удаления валюты
 @app.route('/delete', methods=['POST'])
 def delete_currency():
-    """Эндпоинт для удаления валюты.
-
-    Ожидает JSON в теле запроса:
-    {
-        "currency_name": "название валюты"
-    }
-
-    Returns:
-        JSON ответ с статусом операции:
-        - 200 OK при успешном удалении
-        - 404 если валюта не найдена
-        - 500 при ошибке сервера
-    """
+    conn = None
     try:
+        # Ожидает JSON в теле запроса с названием валюты
         data = request.get_json()
         currency_name = data.get('currency_name')
 
         # Валидация входных данных
         if not currency_name:
-            return jsonify({'error': 'Currency name is required'}), 400
+            return jsonify({'error': 'Требуется указать название валюты'}), 400
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cur = conn.cursor()
 
         # Проверяем существование валюты
-        cursor.execute(
+        cur.execute(
             "SELECT 1 FROM currencies WHERE currency_name = %s",
             (currency_name,)
         )
-        if not cursor.fetchone():
-            return jsonify({'error': 'Currency not found'}), 404
+        if not cur.fetchone():
+            return jsonify({'error': 'Валюта не найдена'}), 404
 
         # Удаляем валюту
-        cursor.execute(
+        cur.execute(
             "DELETE FROM currencies WHERE currency_name = %s",
             (currency_name,)
         )
@@ -177,14 +139,15 @@ def delete_currency():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        conn.close()
+        if conn is not None:  # Проверяем, было ли создано соединение
+            conn.close()
 
 
 # Эндпоинт для получения валюты по названию
 @app.route("/currencies/<currency_name>", methods=["GET"])
 def get_currency(currency_name):
-    conn = get_db_connection()  # Устанавливаем соединение с БД
-    cur = conn.cursor()  # Создаём курсор для выполнения SQL-запросов
+    conn = get_db_connection()
+    cur = conn.cursor()
     cur.execute(
         "SELECT currency_name, rate FROM currencies WHERE currency_name = %s",
         (currency_name,)
@@ -193,7 +156,7 @@ def get_currency(currency_name):
     conn.close()  # Закрываем соединение
     if row:
         return jsonify({"currency_name": row[0], "rate": float(row[1])})  # Если валюта найдена
-    return jsonify({"error": "Currency not found"}), 404  # Если не найдена — 404
+    return jsonify({"error": "Валюта не найдена"}), 404  # Если не найдена - 404
 
 
 # Эндпоинт для проверки, является ли пользователь администратором
@@ -201,12 +164,14 @@ def get_currency(currency_name):
 def check_admin(chat_id):
     conn = get_db_connection()
     cur = conn.cursor()
+
     cur.execute("SELECT * FROM admins WHERE chat_id = %s", (chat_id,))
+
     is_admin = cur.fetchone() is not None  # True, если админ найден
     conn.close()
     return jsonify({"is_admin": is_admin})
 
 
 if __name__ == '__main__':
-    # Запуск приложения на порту 5001
+    # Запуск сервер на порту 5001
     app.run(port=5001, debug=True)
