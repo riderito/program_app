@@ -1,0 +1,12 @@
+Чек-лист для тестирования функции get_triangle_type
+
+Позитивные тесты:
+1. Ввод: (3, 3, 3) → Ожидаемый результат: "equilateral"
+2. Ввод: (4, 4, 5) → Ожидаемый результат: "isosceles"
+3. Ввод: (5, 6, 7) → Ожидаемый результат: "nonequilateral"
+
+Негативные тесты:
+1. Ввод: (0, 4, 5) → Исключение: IncorrectTriangleSides
+2. Ввод: (-1, 2, 2) → Исключение: IncorrectTriangleSides
+3. Ввод: (1, 2, 3) → Исключение: IncorrectTriangleSides
+4. Ввод: ("a", 2, 2) → Исключение: IncorrectTriangleSides
