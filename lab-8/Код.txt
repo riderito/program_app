@@ -1,0 +1,117 @@
+@startuml
+actor Пользователь as User
+participant "Telegram-бот" as Bot
+participant "База данных" as Auth
+participant "currency-manager" as CurrencyManager
+participant "convertor" as Convertor
+
+== Добавление новой валюты (при отсутствии ошибок) ==
+
+User -> Bot : Отправка команды /manage_currency
+activate Bot
+activate User
+
+Bot -> CurrencyManager : Отправка GET-запроса /is_admin/{chat_id}
+activate CurrencyManager
+CurrencyManager -> Auth : Проверка наличия user_id\nв таблице admins
+activate Auth
+Auth -> CurrencyManager : Получение результата SQL-запроса
+deactivate Auth
+CurrencyManager --> Bot : user_id существует (возвращён True)
+deactivate CurrencyManager
+
+Bot -> User : Сообщение "Введите название валюты:"
+Bot -> Bot   : set_state(waiting_for_currency_name)
+deactivate Bot
+
+User -> Bot : Ввод названия валюты (например, "USD")
+activate Bot
+
+Bot -> CurrencyManager : Отправка GET-запроса /currencies/USD
+activate CurrencyManager
+CurrencyManager -> Auth : Cуществует ли в БД такая валюта?
+activate Auth
+Auth -> CurrencyManager : Получение результата SQL-запроса
+deactivate Auth
+CurrencyManager --> Bot : Валюта отсутствует (404 Not Found)
+deactivate CurrencyManager
+
+Bot -> User : Сообщение "Введите курс к рублю:"
+Bot -> Bot   : set_state(waiting_for_currency_rate)
+deactivate Bot
+
+User -> Bot : Ввод курса валюты к рублю (например, "75.5")
+activate Bot
+
+Bot -> CurrencyManager : Отправка POST-запроса /load с json-параметрами:\n{ "currency_name": "USD", "rate": 75.5 }
+activate CurrencyManager
+CurrencyManager -> Auth : Добавление строки с новой валютой
+activate Auth
+Auth -> CurrencyManager : Получение результата SQL-запроса
+deactivate Auth
+CurrencyManager --> Bot : 201 Created\n{ status: "OK" }
+deactivate CurrencyManager
+
+Bot -> User : Сообщение "Валюта USD успешно добавлена"
+deactivate Bot
+deactivate User
+
+note over Bot
+  Возможные ошибки на этом пути:
+  • Если пользователь не админ: Bot → User: «Нет доступа к команде» и завершение.
+  • Если формат названия некорректен (не буквы или длина вне 2–5): Bot → User: «Название должно…» и ожидание нового ввода.
+  • Если GET /currencies/USD вернул 200: Bot → User: «Данная валюта уже существует» и завершение.
+  • Если курс невалидный (не число или ≤ 0): Bot → User: «Пожалуйста, введите корректное число (> 0).» и ожидание нового ввода.
+  • Если POST /load вернул 400/500: Bot → User: «Ошибка при добавлении валюты: <текст ошибки>».
+end note
+
+== Конвертация валюты (при отсутствии ошибок) ==
+
+User -> Bot : Отправка команды /convert
+activate Bot
+activate User
+Bot -> User : Сообщение "Введите название валюты,\nкоторую хотите конвертировать:"
+Bot -> Bot   : set_state(waiting_for_currency_to_convert)
+deactivate Bot
+
+User -> Bot : Ввод названия валюты (например, "EUR")
+activate Bot
+
+Bot -> CurrencyManager : Отправка GET-запроса /currencies/EUR
+activate CurrencyManager
+CurrencyManager -> Auth : Существует ли в БД такая валюта?
+activate Auth
+Auth -> CurrencyManager : Получение результата SQL-запроса
+deactivate Auth
+CurrencyManager --> Bot : Валюта существует (200 OK)
+deactivate CurrencyManager
+
+
+Bot -> User : Сообщение "Введите сумму в этой валюте:"
+Bot -> Bot   : set_state(waiting_for_amount_to_convert)
+deactivate Bot
+
+User -> Bot : Ввод суммы в указанной валюте\nдля конвертации (например, "100")
+activate Bot
+
+Bot -> Convertor : Отправка GET-запроса\n/convert?currency_name=EUR&amount=100
+activate Convertor
+Convertor -> Auth : Какой сохранённый курс у заданной валюты?
+activate Auth
+Auth -> Convertor : Получение результата SQL-запроса
+deactivate Auth
+Convertor --> Bot : Получение результата 200 OK\n{ "converted_amount": 8500, "rate": 85 }
+deactivate Convertor
+
+Bot -> User : Сообщение с полученным результатом\nпо формату "100 EUR = 8500 RUB, Курс: 1 EUR = 85 RUB"
+deactivate Bot
+deactivate User
+
+note over Bot
+  Возможные ошибки на этом пути:
+  • Если GET /currencies/EUR вернул 404: Bot → User: «Валюта EUR не найдена» и завершение.
+  • Если сумма невалидна (не число или ≤ 0): Bot → User: «Введите корректную сумму (> 0).» и ожидание нового ввода.
+  • Если GET /convert вернул 404: Bot → User: «Валюта EUR не найдена» и завершение.
+  • Если GET /convert вернул 500: Bot → User: «Ошибка конвертации: <текст ошибки>».
+end note
+@enduml
