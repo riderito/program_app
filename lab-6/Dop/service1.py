@@ -10,8 +10,8 @@ def aggregate_data():
 
     result = {
             "Результат агрегации": {
-                "Ответ от сервиса 2": service_2_data,
-                "Ответ от сервиса 3": service_3_data
+                **service_2_data,
+                **service_3_data
             }
         }
     return jsonify(result)

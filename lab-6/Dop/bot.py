@@ -21,8 +21,8 @@ async def get_aggregated_data(message: Message):
             data = await response.json()
 
     result = data.get("Результат агрегации", {})
-    service_2_text = result.get("Ответ от сервиса 2", {}).get("service_2", "")
-    service_3_text = result.get("Ответ от сервиса 3", {}).get("service_3", "")
+    service_2_text = result.get("service_2", "")
+    service_3_text = result.get("service_3", "")
 
     final_text = f"{service_2_text} {service_3_text}"
 
